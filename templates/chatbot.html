@@ -1,0 +1,163 @@
+{% extends "layout.html" %}
+{% block title %}IA Financeira{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">IA Financeira</h1>
+    <p class="page-subtitle">Converse com sua contadora inteligente</p>
+  </div>
+  <div class="ia-status-badge">
+    <span class="ia-dot"></span> IA Online
+  </div>
+</div>
+
+<div class="chat-layout">
+  <!-- PAINEL ESQUERDO - sugestões -->
+  <div class="chat-sidebar">
+    <div class="chat-side-card">
+      <h4><i class="fa-solid fa-lightbulb"></i> Perguntas sugeridas</h4>
+      <div class="suggestions-list" id="suggestionsList">
+        <button class="suggestion-btn" onclick="sendSuggestion(this)">Quanto gastei este mês?</button>
+        <button class="suggestion-btn" onclick="sendSuggestion(this)">Qual minha maior despesa?</button>
+        <button class="suggestion-btn" onclick="sendSuggestion(this)">Quanto recebi este mês?</button>
+        <button class="suggestion-btn" onclick="sendSuggestion(this)">Qual meu saldo atual?</button>
+        <button class="suggestion-btn" onclick="sendSuggestion(this)">Quanto gastei com alimentação?</button>
+        <button class="suggestion-btn" onclick="sendSuggestion(this)">Me dê um resumo financeiro</button>
+        <button class="suggestion-btn" onclick="sendSuggestion(this)">Como posso economizar dinheiro?</button>
+        <button class="suggestion-btn" onclick="sendSuggestion(this)">Quanto gastei com transporte?</button>
+      </div>
+    </div>
+
+    <div class="chat-side-card ia-info-card">
+      <h4><i class="fa-solid fa-robot"></i> Sobre a FinIA</h4>
+      <p>A FinIA analisa seus dados financeiros em tempo real e responde perguntas em linguagem natural.</p>
+      <ul class="ia-features">
+        <li><i class="fa-solid fa-check"></i> Análise de gastos</li>
+        <li><i class="fa-solid fa-check"></i> Dicas de economia</li>
+        <li><i class="fa-solid fa-check"></i> Resumos mensais</li>
+        <li><i class="fa-solid fa-check"></i> Comparativos</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- CHAT PRINCIPAL -->
+  <div class="chat-main">
+    <div class="chat-messages" id="chatMessages">
+      <!-- Mensagem de boas-vindas -->
+      <div class="msg-row bot">
+        <div class="msg-avatar"><i class="fa-solid fa-robot"></i></div>
+        <div class="msg-bubble bot">
+          <p>👋 Olá! Sou a <strong>FinIA</strong>, sua contadora pessoal com inteligência artificial.</p>
+          <p>Posso responder perguntas sobre seus gastos, receitas, saldo e dar dicas de economia. Como posso ajudar você hoje?</p>
+          <span class="msg-time">agora</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-input-area">
+      <div class="chat-input-wrap">
+        <input
+          type="text"
+          id="chatInput"
+          class="chat-input"
+          placeholder="Digite sua pergunta financeira..."
+          autocomplete="off"
+        />
+        <button class="chat-send-btn" id="chatSendBtn" onclick="sendMessage()">
+          <i class="fa-solid fa-paper-plane"></i>
+        </button>
+      </div>
+      <p class="chat-hint">Pressione <kbd>Enter</kbd> para enviar</p>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const chatMessages = document.getElementById("chatMessages");
+const chatInput    = document.getElementById("chatInput");
+
+function getTime() {
+  return new Date().toLocaleTimeString("pt-BR", {hour:"2-digit", minute:"2-digit"});
+}
+
+function appendMessage(role, text) {
+  const isBot = role === "bot";
+  const row   = document.createElement("div");
+  row.className = `msg-row ${role}`;
+
+  // Processar markdown simples (**bold**, bullet com •, \n)
+  const html = text
+    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\n•/g, "<br>•")
+    .replace(/\n/g, "<br>");
+
+  row.innerHTML = isBot
+    ? `<div class="msg-avatar"><i class="fa-solid fa-robot"></i></div>
+       <div class="msg-bubble bot"><p>${html}</p><span class="msg-time">${getTime()}</span></div>`
+    : `<div class="msg-bubble user"><p>${html}</p><span class="msg-time">${getTime()}</span></div>
+       <div class="msg-avatar user-av"><i class="fa-solid fa-user"></i></div>`;
+
+  chatMessages.appendChild(row);
+  chatMessages.scrollTo({top: chatMessages.scrollHeight, behavior:"smooth"});
+  return row;
+}
+
+function appendTyping() {
+  const row = document.createElement("div");
+  row.className = "msg-row bot";
+  row.id = "typingIndicator";
+  row.innerHTML = `
+    <div class="msg-avatar"><i class="fa-solid fa-robot"></i></div>
+    <div class="msg-bubble bot typing-bubble">
+      <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+    </div>`;
+  chatMessages.appendChild(row);
+  chatMessages.scrollTo({top: chatMessages.scrollHeight, behavior:"smooth"});
+}
+
+function removeTyping() {
+  document.getElementById("typingIndicator")?.remove();
+}
+
+async function sendMessage() {
+  const text = chatInput.value.trim();
+  if (!text) return;
+
+  chatInput.value = "";
+  appendMessage("user", text);
+
+  const btn = document.getElementById("chatSendBtn");
+  btn.disabled = true;
+  appendTyping();
+
+  try {
+    const res  = await fetch("/api/chatbot", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({message: text})
+    });
+    const data = await res.json();
+    removeTyping();
+    appendMessage("bot", data.response || "Não entendi, tente novamente.");
+  } catch {
+    removeTyping();
+    appendMessage("bot", "❌ Erro de conexão. Tente novamente.");
+  } finally {
+    btn.disabled = false;
+    chatInput.focus();
+  }
+}
+
+function sendSuggestion(btn) {
+  chatInput.value = btn.textContent;
+  sendMessage();
+}
+
+chatInput.addEventListener("keydown", e => {
+  if (e.key === "Enter") sendMessage();
+});
+</script>
+{% endblock %}

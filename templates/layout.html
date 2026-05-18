@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FinIA – {% block title %}Contador Pessoal com IA{% endblock %}</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet" />
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <!-- CSS principal -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+</head>
+<body>
+
+  <!-- ───── SIDEBAR ───── -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon">
+        <i class="fa-solid fa-chart-line"></i>
+      </div>
+      <span class="brand-name">Fin<span class="brand-ia">IA</span></span>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="/dashboard" class="nav-item {% if request.path == '/dashboard' %}active{% endif %}">
+        <i class="fa-solid fa-house"></i>
+        <span>Dashboard</span>
+      </a>
+      <a href="/transacoes" class="nav-item {% if request.path == '/transacoes' %}active{% endif %}">
+        <i class="fa-solid fa-right-left"></i>
+        <span>Transações</span>
+      </a>
+      <a href="/chatbot" class="nav-item {% if request.path == '/chatbot' %}active{% endif %}">
+        <i class="fa-solid fa-robot"></i>
+        <span>IA Financeira</span>
+        <span class="nav-badge">AI</span>
+      </a>
+      <a href="/relatorios" class="nav-item {% if request.path == '/relatorios' %}active{% endif %}">
+        <i class="fa-solid fa-chart-bar"></i>
+        <span>Relatórios</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="user-card">
+        <div class="user-avatar">
+          <i class="fa-solid fa-user"></i>
+        </div>
+        <div class="user-info">
+          <span class="user-name">Minha Conta</span>
+          <span class="user-role">Plano Gratuito</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ───── MOBILE TOPBAR ───── -->
+  <header class="topbar">
+    <button class="menu-toggle" id="menuToggle">
+      <i class="fa-solid fa-bars"></i>
+    </button>
+    <span class="topbar-title">Fin<span>IA</span></span>
+    <div class="topbar-right">
+      <span class="today-badge">
+        <i class="fa-regular fa-calendar"></i>
+        <span id="todayDate"></span>
+      </span>
+    </div>
+  </header>
+
+  <!-- ───── OVERLAY MOBILE ───── -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <!-- ───── CONTEÚDO ───── -->
+  <main class="main-content">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- ───── TOAST ───── -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- JS principal -->
+  <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,297 @@
+{% extends "layout.html" %}
+{% block title %}Transações{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Transações</h1>
+    <p class="page-subtitle">Gerencie receitas e despesas</p>
+  </div>
+  <button class="btn-primary" onclick="openModal()">
+    <i class="fa-solid fa-plus"></i> Nova Transação
+  </button>
+</div>
+
+<!-- FILTROS -->
+<div class="filters-card">
+  <div class="filters-row">
+    <div class="filter-group">
+      <label>Tipo</label>
+      <select id="filtroTipo" onchange="loadTransacoes()">
+        <option value="">Todos</option>
+        <option value="receita">Receitas</option>
+        <option value="despesa">Despesas</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Categoria</label>
+      <select id="filtroCategoria" onchange="loadTransacoes()">
+        <option value="">Todas</option>
+        <option value="alimentacao">Alimentação</option>
+        <option value="transporte">Transporte</option>
+        <option value="lazer">Lazer</option>
+        <option value="saude">Saúde</option>
+        <option value="educacao">Educação</option>
+        <option value="contas">Contas</option>
+        <option value="compras">Compras</option>
+        <option value="salario">Salário</option>
+        <option value="investimentos">Investimentos</option>
+        <option value="outros">Outros</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Mês</label>
+      <input type="month" id="filtroMes" onchange="loadTransacoes()" />
+    </div>
+    <div class="filter-group search-group">
+      <label>Buscar</label>
+      <div class="search-wrap">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="text" id="filtroBusca" placeholder="Pesquisar..." oninput="loadTransacoes()" />
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- LISTA -->
+<div class="section-card">
+  <div class="section-header">
+    <h3 id="transacoesCount">Transações</h3>
+    <div class="totais-inline">
+      <span class="badge-receita" id="totReceitas">Receitas: R$ 0,00</span>
+      <span class="badge-despesa" id="totDespesas">Despesas: R$ 0,00</span>
+    </div>
+  </div>
+  <div id="transacoesList">
+    <div class="loading-pulse">Carregando...</div>
+  </div>
+</div>
+
+<!-- MODAL NOVA/EDITAR TRANSAÇÃO -->
+<div class="modal-overlay hidden" id="modalOverlay">
+  <div class="modal" id="modal">
+    <div class="modal-header">
+      <h3 id="modalTitle">Nova Transação</h3>
+      <button class="modal-close" onclick="closeModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+
+      <!-- TIPO TOGGLE -->
+      <div class="tipo-toggle">
+        <button class="tipo-btn active" id="btnReceita" onclick="setTipo('receita')">
+          <i class="fa-solid fa-arrow-trend-up"></i> Receita
+        </button>
+        <button class="tipo-btn" id="btnDespesa" onclick="setTipo('despesa')">
+          <i class="fa-solid fa-arrow-trend-down"></i> Despesa
+        </button>
+      </div>
+
+      <input type="hidden" id="formTipo" value="receita" />
+      <input type="hidden" id="formId" value="" />
+
+      <div class="form-group">
+        <label>Descrição</label>
+        <input type="text" id="formDescricao" placeholder="Ex: Supermercado, Salário..." maxlength="80" />
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Valor (R$)</label>
+          <input type="number" id="formValor" placeholder="0,00" min="0" step="0.01" />
+        </div>
+        <div class="form-group">
+          <label>Data</label>
+          <input type="date" id="formData" />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Categoria</label>
+        <select id="formCategoria">
+          <option value="alimentacao">🍔 Alimentação</option>
+          <option value="transporte">🚗 Transporte</option>
+          <option value="lazer">🎬 Lazer</option>
+          <option value="saude">❤️ Saúde</option>
+          <option value="educacao">📚 Educação</option>
+          <option value="contas">📄 Contas</option>
+          <option value="compras">🛍️ Compras</option>
+          <option value="salario">💰 Salário</option>
+          <option value="investimentos">📈 Investimentos</option>
+          <option value="outros">⭐ Outros</option>
+        </select>
+      </div>
+
+      <button class="btn-primary btn-full" id="formSubmit" onclick="submitForm()">
+        <i class="fa-solid fa-check"></i> <span id="submitLabel">Salvar Transação</span>
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CATEGORIA_ICONS = {
+  alimentacao:"fa-utensils", transporte:"fa-car", lazer:"fa-gamepad",
+  saude:"fa-heart-pulse", educacao:"fa-graduation-cap", contas:"fa-file-invoice",
+  compras:"fa-bag-shopping", salario:"fa-money-bill-trend-up",
+  investimentos:"fa-chart-line", outros:"fa-circle-dot"
+};
+const CATEGORIA_LABELS = {
+  alimentacao:"Alimentação", transporte:"Transporte", lazer:"Lazer",
+  saude:"Saúde", educacao:"Educação", contas:"Contas", compras:"Compras",
+  salario:"Salário", investimentos:"Investimentos", outros:"Outros"
+};
+
+// Definir mês atual no filtro
+const hoje = new Date();
+document.getElementById("filtroMes").value =
+  `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,"0")}`;
+document.getElementById("formData").value = hoje.toISOString().split("T")[0];
+
+async function loadTransacoes() {
+  const tipo      = document.getElementById("filtroTipo").value;
+  const categoria = document.getElementById("filtroCategoria").value;
+  const mes       = document.getElementById("filtroMes").value;
+  const busca     = document.getElementById("filtroBusca").value;
+
+  let url = "/api/transacoes?";
+  if (tipo)      url += `tipo=${tipo}&`;
+  if (categoria) url += `categoria=${categoria}&`;
+  if (mes)       url += `mes=${mes}&`;
+  if (busca)     url += `busca=${encodeURIComponent(busca)}&`;
+
+  const res  = await fetch(url);
+  const data = await res.json();
+
+  const receitas = data.filter(t => t.tipo === "receita").reduce((s,t) => s+t.valor, 0);
+  const despesas = data.filter(t => t.tipo === "despesa").reduce((s,t) => s+t.valor, 0);
+
+  document.getElementById("transacoesCount").textContent = `${data.length} transação(ões)`;
+  document.getElementById("totReceitas").textContent = `↑ R$ ${receitas.toFixed(2)}`;
+  document.getElementById("totDespesas").textContent = `↓ R$ ${despesas.toFixed(2)}`;
+
+  const list = document.getElementById("transacoesList");
+
+  if (data.length === 0) {
+    list.innerHTML = '<p class="empty-msg">Nenhuma transação encontrada.</p>';
+    return;
+  }
+
+  list.innerHTML = "";
+  data.forEach(t => {
+    const icon  = CATEGORIA_ICONS[t.categoria] || "fa-circle-dot";
+    const label = CATEGORIA_LABELS[t.categoria] || t.categoria;
+    const sinal = t.tipo === "receita" ? "+" : "-";
+    const cls   = t.tipo === "receita" ? "receita" : "despesa";
+    const dataF = new Date(t.data + "T00:00:00").toLocaleDateString("pt-BR");
+
+    list.insertAdjacentHTML("beforeend", `
+      <div class="transacao-item" id="ti-${t.id}">
+        <div class="ti-icon ti-${t.categoria}"><i class="fa-solid ${icon}"></i></div>
+        <div class="ti-info">
+          <span class="ti-desc">${t.descricao}</span>
+          <span class="ti-meta">${label} · ${dataF}</span>
+        </div>
+        <span class="ti-valor ${cls}">${sinal}R$ ${t.valor.toFixed(2)}</span>
+        <div class="ti-actions">
+          <button class="action-btn edit-btn" onclick='editTransacao(${JSON.stringify(t)})'>
+            <i class="fa-solid fa-pen"></i>
+          </button>
+          <button class="action-btn delete-btn" onclick="deleteTransacao(${t.id})">
+            <i class="fa-solid fa-trash"></i>
+          </button>
+        </div>
+      </div>
+    `);
+  });
+}
+
+function setTipo(tipo) {
+  document.getElementById("formTipo").value = tipo;
+  document.getElementById("btnReceita").classList.toggle("active", tipo === "receita");
+  document.getElementById("btnDespesa").classList.toggle("active", tipo === "despesa");
+}
+
+function openModal() {
+  document.getElementById("modalTitle").textContent = "Nova Transação";
+  document.getElementById("submitLabel").textContent = "Salvar Transação";
+  document.getElementById("formId").value = "";
+  document.getElementById("formDescricao").value = "";
+  document.getElementById("formValor").value = "";
+  document.getElementById("formData").value = new Date().toISOString().split("T")[0];
+  document.getElementById("formCategoria").value = "alimentacao";
+  setTipo("despesa");
+
+  document.getElementById("modalOverlay").classList.remove("hidden");
+  setTimeout(() => document.getElementById("modal").classList.add("show"), 10);
+}
+
+function closeModal() {
+  document.getElementById("modal").classList.remove("show");
+  setTimeout(() => document.getElementById("modalOverlay").classList.add("hidden"), 300);
+}
+
+function editTransacao(t) {
+  document.getElementById("modalTitle").textContent = "Editar Transação";
+  document.getElementById("submitLabel").textContent = "Atualizar";
+  document.getElementById("formId").value = t.id;
+  document.getElementById("formDescricao").value = t.descricao;
+  document.getElementById("formValor").value = t.valor;
+  document.getElementById("formData").value = t.data;
+  document.getElementById("formCategoria").value = t.categoria;
+  setTipo(t.tipo);
+
+  document.getElementById("modalOverlay").classList.remove("hidden");
+  setTimeout(() => document.getElementById("modal").classList.add("show"), 10);
+}
+
+async function submitForm() {
+  const id        = document.getElementById("formId").value;
+  const descricao = document.getElementById("formDescricao").value.trim();
+  const valor     = document.getElementById("formValor").value;
+  const data      = document.getElementById("formData").value;
+  const categoria = document.getElementById("formCategoria").value;
+  const tipo      = document.getElementById("formTipo").value;
+
+  if (!descricao || !valor || !data) {
+    showToast("Preencha todos os campos.", "error");
+    return;
+  }
+
+  const body = {descricao, valor: parseFloat(valor), categoria, tipo, data};
+  const method = id ? "PUT" : "POST";
+  const url    = id ? `/api/transacoes/${id}` : "/api/transacoes";
+
+  const res = await fetch(url, {
+    method,
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify(body)
+  });
+  const result = await res.json();
+
+  if (result.success || result.id) {
+    showToast(id ? "✅ Atualizado!" : "✅ Transação salva!", "success");
+    closeModal();
+    loadTransacoes();
+  } else {
+    showToast("❌ " + (result.error || "Erro"), "error");
+  }
+}
+
+async function deleteTransacao(id) {
+  if (!confirm("Excluir esta transação?")) return;
+  await fetch(`/api/transacoes/${id}`, {method: "DELETE"});
+  document.getElementById(`ti-${id}`)?.remove();
+  showToast("🗑️ Excluído.", "info");
+  loadTransacoes();
+}
+
+// Fechar modal clicando fora
+document.getElementById("modalOverlay").addEventListener("click", e => {
+  if (e.target === document.getElementById("modalOverlay")) closeModal();
+});
+
+loadTransacoes();
+</script>
+{% endblock %}

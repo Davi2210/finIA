@@ -1,0 +1,239 @@
+{% extends "layout.html" %}
+{% block title %}Relatórios{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Relatórios</h1>
+    <p class="page-subtitle">Análise detalhada das suas finanças</p>
+  </div>
+  <button class="btn-secondary" onclick="exportCSV()">
+    <i class="fa-solid fa-download"></i> Exportar CSV
+  </button>
+</div>
+
+<!-- FILTROS DE RELATÓRIO -->
+<div class="filters-card">
+  <div class="filters-row">
+    <div class="filter-group">
+      <label>Tipo de Relatório</label>
+      <select id="tipoRelatorio" onchange="loadRelatorio()">
+        <option value="mensal">Mensal</option>
+        <option value="anual">Anual</option>
+        <option value="completo">Completo</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Ano</label>
+      <select id="filtroAno" onchange="loadRelatorio()"></select>
+    </div>
+    <div class="filter-group" id="mesFiltroWrap">
+      <label>Mês</label>
+      <select id="filtroMesRel" onchange="loadRelatorio()">
+        <option value="01">Janeiro</option>
+        <option value="02">Fevereiro</option>
+        <option value="03">Março</option>
+        <option value="04">Abril</option>
+        <option value="05">Maio</option>
+        <option value="06">Junho</option>
+        <option value="07">Julho</option>
+        <option value="08">Agosto</option>
+        <option value="09">Setembro</option>
+        <option value="10">Outubro</option>
+        <option value="11">Novembro</option>
+        <option value="12">Dezembro</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<!-- CARDS TOTAIS -->
+<div class="cards-grid three-col" id="relCards">
+  <div class="card card-receita">
+    <div class="card-icon"><i class="fa-solid fa-arrow-trend-up"></i></div>
+    <div class="card-content">
+      <span class="card-label">Total Receitas</span>
+      <span class="card-value" id="relReceitas">—</span>
+    </div>
+    <div class="card-bg-icon"><i class="fa-solid fa-arrow-trend-up"></i></div>
+  </div>
+  <div class="card card-despesa">
+    <div class="card-icon"><i class="fa-solid fa-arrow-trend-down"></i></div>
+    <div class="card-content">
+      <span class="card-label">Total Despesas</span>
+      <span class="card-value" id="relDespesas">—</span>
+    </div>
+    <div class="card-bg-icon"><i class="fa-solid fa-arrow-trend-down"></i></div>
+  </div>
+  <div class="card card-saldo">
+    <div class="card-icon"><i class="fa-solid fa-scale-balanced"></i></div>
+    <div class="card-content">
+      <span class="card-label">Saldo do Período</span>
+      <span class="card-value" id="relSaldo">—</span>
+    </div>
+    <div class="card-bg-icon"><i class="fa-solid fa-scale-balanced"></i></div>
+  </div>
+</div>
+
+<!-- GRÁFICO DE BARRAS POR CATEGORIA -->
+<div class="chart-card" style="margin-bottom:1.5rem">
+  <div class="chart-header">
+    <h3>Gastos por Categoria</h3>
+  </div>
+  <div class="chart-wrap" style="height:260px">
+    <canvas id="chartRelCat"></canvas>
+  </div>
+</div>
+
+<!-- TABELA DE TRANSAÇÕES -->
+<div class="section-card">
+  <div class="section-header">
+    <h3 id="relCount">Transações do período</h3>
+  </div>
+  <div class="table-wrap">
+    <table class="data-table" id="relTable">
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Descrição</th>
+          <th>Categoria</th>
+          <th>Tipo</th>
+          <th class="text-right">Valor</th>
+        </tr>
+      </thead>
+      <tbody id="relTbody">
+        <tr><td colspan="5" class="loading-pulse">Carregando...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CATEGORIA_LABELS = {
+  alimentacao:"Alimentação", transporte:"Transporte", lazer:"Lazer",
+  saude:"Saúde", educacao:"Educação", contas:"Contas", compras:"Compras",
+  salario:"Salário", investimentos:"Investimentos", outros:"Outros"
+};
+const CAT_COLORS = [
+  "#6EE7C7","#818CF8","#F97316","#FB7185","#34D399",
+  "#A78BFA","#FBBF24","#38BDF8","#E879F9","#94A3B8"
+];
+
+let chartCat = null;
+let currentData = [];
+
+// Preencher anos
+const anoSel = document.getElementById("filtroAno");
+const anoAtual = new Date().getFullYear();
+for (let y = anoAtual; y >= anoAtual - 4; y--) {
+  anoSel.insertAdjacentHTML("beforeend", `<option value="${y}">${y}</option>`);
+}
+
+// Mês atual
+const mesAtual = String(new Date().getMonth() + 1).padStart(2, "0");
+document.getElementById("filtroMesRel").value = mesAtual;
+
+document.getElementById("tipoRelatorio").addEventListener("change", function() {
+  document.getElementById("mesFiltroWrap").style.display =
+    this.value === "mensal" ? "" : "none";
+});
+
+async function loadRelatorio() {
+  const tipo = document.getElementById("tipoRelatorio").value;
+  const ano  = document.getElementById("filtroAno").value;
+  const mes  = document.getElementById("filtroMesRel").value;
+
+  const res  = await fetch(`/api/relatorios?tipo=${tipo}&ano=${ano}&mes=${mes}`);
+  const data = await res.json();
+  currentData = data.transacoes;
+
+  // Cards
+  document.getElementById("relReceitas").textContent = `R$ ${data.totais.receitas.toFixed(2)}`;
+  document.getElementById("relDespesas").textContent = `R$ ${data.totais.despesas.toFixed(2)}`;
+  const saldo = data.totais.saldo;
+  document.getElementById("relSaldo").textContent =
+    `${saldo >= 0 ? "+" : ""}R$ ${saldo.toFixed(2)}`;
+
+  document.getElementById("relCount").textContent =
+    `${data.transacoes.length} transação(ões)`;
+
+  // Gráfico categorias
+  const cats   = Object.keys(data.por_categoria);
+  const vals   = Object.values(data.por_categoria);
+  const colors = cats.map((_,i) => CAT_COLORS[i % CAT_COLORS.length]);
+
+  if (chartCat) chartCat.destroy();
+  chartCat = new Chart(document.getElementById("chartRelCat"), {
+    type: "bar",
+    data: {
+      labels: cats.map(c => CATEGORIA_LABELS[c] || c),
+      datasets: [{
+        label: "Gastos (R$)",
+        data: vals,
+        backgroundColor: colors,
+        borderRadius: 8,
+        borderWidth: 0,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor:"#1E2235", titleColor:"#E2E8F0", bodyColor:"#94A3B8",
+          borderColor:"#2D3250", borderWidth:1,
+          callbacks: { label: ctx => ` R$ ${ctx.parsed.y.toFixed(2)}` }
+        }
+      },
+      scales: {
+        x: { grid:{ color:"rgba(255,255,255,0.04)" }, ticks:{ color:"#64748B" } },
+        y: { grid:{ color:"rgba(255,255,255,0.04)" }, ticks:{ color:"#64748B",
+             callback: v => `R$ ${v}` } }
+      }
+    }
+  });
+
+  // Tabela
+  const tbody = document.getElementById("relTbody");
+  tbody.innerHTML = "";
+  if (data.transacoes.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-msg">Nenhuma transação encontrada.</td></tr>';
+    return;
+  }
+  data.transacoes.forEach(t => {
+    const dataF = new Date(t.data + "T00:00:00").toLocaleDateString("pt-BR");
+    const cls   = t.tipo === "receita" ? "receita" : "despesa";
+    const sinal = t.tipo === "receita" ? "+" : "-";
+    tbody.insertAdjacentHTML("beforeend", `
+      <tr>
+        <td>${dataF}</td>
+        <td>${t.descricao}</td>
+        <td><span class="cat-chip cat-${t.categoria}">${CATEGORIA_LABELS[t.categoria]||t.categoria}</span></td>
+        <td><span class="tipo-chip ${cls}">${t.tipo}</span></td>
+        <td class="text-right ${cls}">${sinal}R$ ${t.valor.toFixed(2)}</td>
+      </tr>
+    `);
+  });
+}
+
+function exportCSV() {
+  if (!currentData.length) { showToast("Nenhum dado para exportar.", "error"); return; }
+  const header = "Data,Descrição,Categoria,Tipo,Valor\n";
+  const rows   = currentData.map(t =>
+    `${t.data},"${t.descricao}",${t.categoria},${t.tipo},${t.valor.toFixed(2)}`
+  ).join("\n");
+  const blob = new Blob([header + rows], {type:"text/csv;charset=utf-8;"});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = "finia-relatorio.csv";
+  a.click();
+  showToast("📥 CSV exportado!", "success");
+}
+
+loadRelatorio();
+</script>
+{% endblock %}

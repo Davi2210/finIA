@@ -1,0 +1,313 @@
+{% extends "layout.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Dashboard</h1>
+    <p class="page-subtitle">Visão geral das suas finanças</p>
+  </div>
+  <a href="/transacoes" class="btn-primary">
+    <i class="fa-solid fa-plus"></i> Nova Transação
+  </a>
+</div>
+
+<!-- CARDS PRINCIPAIS -->
+<div class="cards-grid" id="cardsGrid">
+  <div class="card card-saldo" id="cardSaldo">
+    <div class="card-icon"><i class="fa-solid fa-wallet"></i></div>
+    <div class="card-content">
+      <span class="card-label">Saldo Total</span>
+      <span class="card-value" id="saldoTotal">—</span>
+    </div>
+    <div class="card-bg-icon"><i class="fa-solid fa-wallet"></i></div>
+  </div>
+
+  <div class="card card-receita">
+    <div class="card-icon"><i class="fa-solid fa-arrow-trend-up"></i></div>
+    <div class="card-content">
+      <span class="card-label">Receitas do Mês</span>
+      <span class="card-value" id="mesReceitas">—</span>
+    </div>
+    <div class="card-bg-icon"><i class="fa-solid fa-arrow-trend-up"></i></div>
+  </div>
+
+  <div class="card card-despesa">
+    <div class="card-icon"><i class="fa-solid fa-arrow-trend-down"></i></div>
+    <div class="card-content">
+      <span class="card-label">Despesas do Mês</span>
+      <span class="card-value" id="mesDespesas">—</span>
+    </div>
+    <div class="card-bg-icon"><i class="fa-solid fa-arrow-trend-down"></i></div>
+  </div>
+
+  <div class="card card-economia">
+    <div class="card-icon"><i class="fa-solid fa-piggy-bank"></i></div>
+    <div class="card-content">
+      <span class="card-label">Economia do Mês</span>
+      <span class="card-value" id="mesSaldo">—</span>
+      <span class="card-pct" id="economiaPct"></span>
+    </div>
+    <div class="card-bg-icon"><i class="fa-solid fa-piggy-bank"></i></div>
+  </div>
+</div>
+
+<!-- IA RÁPIDA -->
+<div class="ia-quick-card">
+  <div class="ia-quick-header">
+    <div class="ia-icon"><i class="fa-solid fa-robot"></i></div>
+    <div>
+      <h3>Registrar com IA</h3>
+      <p>Digite em linguagem natural — a IA classifica automaticamente</p>
+    </div>
+  </div>
+  <div class="ia-input-wrap">
+    <input type="text" id="iaInput" class="ia-input"
+           placeholder='Ex: "gastei 45 reais com pizza" ou "recebi 2000 de salário"' />
+    <button class="ia-btn" id="iaBtn">
+      <i class="fa-solid fa-bolt"></i>
+      <span>Processar</span>
+    </button>
+  </div>
+  <div class="ia-result hidden" id="iaResult"></div>
+</div>
+
+<!-- GRÁFICOS -->
+<div class="charts-grid">
+  <div class="chart-card chart-big">
+    <div class="chart-header">
+      <h3>Evolução Financeira</h3>
+      <span class="chart-period">Últimos 6 meses</span>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="chartEvolucao"></canvas>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <div class="chart-header">
+      <h3>Gastos por Categoria</h3>
+      <span class="chart-period">Mês atual</span>
+    </div>
+    <div class="chart-wrap chart-donut-wrap">
+      <canvas id="chartCategorias"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ÚLTIMAS TRANSAÇÕES -->
+<div class="section-card">
+  <div class="section-header">
+    <h3>Últimas Transações</h3>
+    <a href="/transacoes" class="link-all">Ver todas <i class="fa-solid fa-arrow-right"></i></a>
+  </div>
+  <div class="transacao-list" id="ultimasLista">
+    <div class="loading-pulse">Carregando...</div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CATEGORIA_ICONS = {
+  alimentacao:"fa-utensils", transporte:"fa-car", lazer:"fa-gamepad",
+  saude:"fa-heart-pulse", educacao:"fa-graduation-cap", contas:"fa-file-invoice",
+  compras:"fa-bag-shopping", salario:"fa-money-bill-trend-up",
+  investimentos:"fa-chart-line", outros:"fa-circle-dot"
+};
+const CATEGORIA_LABELS = {
+  alimentacao:"Alimentação", transporte:"Transporte", lazer:"Lazer",
+  saude:"Saúde", educacao:"Educação", contas:"Contas", compras:"Compras",
+  salario:"Salário", investimentos:"Investimentos", outros:"Outros"
+};
+const CAT_COLORS = [
+  "#6EE7C7","#818CF8","#F97316","#FB7185","#34D399",
+  "#A78BFA","#FBBF24","#38BDF8","#E879F9","#94A3B8"
+];
+
+async function loadDashboard() {
+  const res  = await fetch("/api/dashboard");
+  const data = await res.json();
+
+  // Cards
+  animateValue("saldoTotal",   data.saldo,       true);
+  animateValue("mesReceitas",  data.mes_receitas, false);
+  animateValue("mesDespesas",  data.mes_despesas, false);
+  animateValue("mesSaldo",     data.mes_saldo,    false);
+
+  const pctEl = document.getElementById("economiaPct");
+  if (data.economia_pct >= 0) {
+    pctEl.textContent = `+${data.economia_pct}% da renda`;
+    pctEl.className   = "card-pct positive";
+  } else {
+    pctEl.textContent = `${data.economia_pct}% da renda`;
+    pctEl.className   = "card-pct negative";
+  }
+
+  // Saldo card color
+  const cardSaldo = document.getElementById("cardSaldo");
+  if (data.saldo < 0) cardSaldo.classList.add("negative");
+
+  // Gráfico evolução
+  const labels  = data.evolucao.map(e => e.mes);
+  const recData  = data.evolucao.map(e => e.receitas);
+  const despData = data.evolucao.map(e => e.despesas);
+
+  new Chart(document.getElementById("chartEvolucao"), {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        { label:"Receitas", data: recData,  borderColor:"#6EE7C7", backgroundColor:"rgba(110,231,199,0.10)",
+          tension:0.4, fill:true, pointBackgroundColor:"#6EE7C7", pointRadius:5 },
+        { label:"Despesas", data: despData, borderColor:"#FB7185", backgroundColor:"rgba(251,113,133,0.08)",
+          tension:0.4, fill:true, pointBackgroundColor:"#FB7185", pointRadius:5 },
+      ]
+    },
+    options: chartDefaults("line")
+  });
+
+  // Gráfico categorias
+  const cats   = Object.keys(data.por_categoria);
+  const vals   = Object.values(data.por_categoria);
+  const colors = cats.map((_,i) => CAT_COLORS[i % CAT_COLORS.length]);
+
+  new Chart(document.getElementById("chartCategorias"), {
+    type: "doughnut",
+    data: {
+      labels: cats.map(c => CATEGORIA_LABELS[c] || c),
+      datasets: [{ data: vals, backgroundColor: colors, borderWidth: 0, hoverOffset: 8 }]
+    },
+    options: {
+      ...chartDefaults("doughnut"),
+      cutout: "65%",
+    }
+  });
+
+  // Últimas transações
+  const lista = document.getElementById("ultimasLista");
+  lista.innerHTML = "";
+  if (data.ultimas.length === 0) {
+    lista.innerHTML = '<p class="empty-msg">Nenhuma transação cadastrada.</p>';
+    return;
+  }
+  data.ultimas.forEach(t => {
+    const icon  = CATEGORIA_ICONS[t.categoria] || "fa-circle-dot";
+    const label = CATEGORIA_LABELS[t.categoria] || t.categoria;
+    const sinal = t.tipo === "receita" ? "+" : "-";
+    const cls   = t.tipo === "receita" ? "receita" : "despesa";
+    const dataF = new Date(t.data + "T00:00:00").toLocaleDateString("pt-BR");
+    lista.insertAdjacentHTML("beforeend", `
+      <div class="transacao-item">
+        <div class="ti-icon ti-${t.categoria}"><i class="fa-solid ${icon}"></i></div>
+        <div class="ti-info">
+          <span class="ti-desc">${t.descricao}</span>
+          <span class="ti-meta">${label} · ${dataF}</span>
+        </div>
+        <span class="ti-valor ${cls}">${sinal}R$ ${t.valor.toFixed(2)}</span>
+      </div>
+    `);
+  });
+}
+
+function chartDefaults(type) {
+  const base = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: type === "doughnut",
+        position: "bottom",
+        labels: { color: "#94A3B8", font: { family: "DM Sans", size: 12 }, padding: 16, boxWidth: 10 }
+      },
+      tooltip: {
+        backgroundColor: "#1E2235",
+        titleColor: "#E2E8F0",
+        bodyColor: "#94A3B8",
+        borderColor: "#2D3250",
+        borderWidth: 1,
+        callbacks: {
+          label: ctx => ` R$ ${ctx.parsed.y !== undefined ? ctx.parsed.y.toFixed(2) : ctx.parsed.toFixed(2)}`
+        }
+      }
+    },
+    scales: type === "line" ? {
+      x: { grid:{ color:"rgba(255,255,255,0.04)" }, ticks:{ color:"#64748B", font:{family:"DM Sans"} } },
+      y: { grid:{ color:"rgba(255,255,255,0.04)" }, ticks:{ color:"#64748B", font:{family:"DM Sans"},
+           callback: v => `R$ ${v.toFixed(0)}` } }
+    } : undefined
+  };
+  return base;
+}
+
+function animateValue(id, target, signed) {
+  const el    = document.getElementById(id);
+  const start = 0;
+  const dur   = 900;
+  const st    = performance.now();
+
+  function update(ts) {
+    const prog = Math.min((ts - st) / dur, 1);
+    const ease = 1 - Math.pow(1 - prog, 3);
+    const val  = start + (target - start) * ease;
+    const sinal = signed && val >= 0 ? "+" : "";
+    el.textContent = `${sinal}R$ ${Math.abs(val).toFixed(2)}`;
+    if (prog < 1) requestAnimationFrame(update);
+    else {
+      const s = signed && target >= 0 ? "+" : "";
+      el.textContent = `${s}R$ ${Math.abs(target).toFixed(2)}`;
+    }
+  }
+  requestAnimationFrame(update);
+}
+
+// IA rápida
+document.getElementById("iaBtn").addEventListener("click", async () => {
+  const input = document.getElementById("iaInput");
+  const texto = input.value.trim();
+  if (!texto) return;
+
+  const btn = document.getElementById("iaBtn");
+  btn.classList.add("loading");
+
+  try {
+    const res  = await fetch("/api/ia/processar", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({texto})
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      const t   = data.transacao;
+      const cls = t.tipo === "receita" ? "receita" : "despesa";
+      document.getElementById("iaResult").innerHTML = `
+        <div class="ia-preview ${cls}">
+          <i class="fa-solid fa-check-circle"></i>
+          <div>
+            <strong>${t.descricao}</strong>
+            <span>R$ ${t.valor.toFixed(2)} · ${CATEGORIA_LABELS[t.categoria]} · ${t.tipo}</span>
+          </div>
+        </div>
+      `;
+      document.getElementById("iaResult").classList.remove("hidden");
+      input.value = "";
+      showToast("✅ Transação registrada com IA!", "success");
+      setTimeout(loadDashboard, 500);
+    } else {
+      showToast("❌ " + data.error, "error");
+    }
+  } catch {
+    showToast("Erro ao processar.", "error");
+  } finally {
+    btn.classList.remove("loading");
+  }
+});
+
+document.getElementById("iaInput").addEventListener("keydown", e => {
+  if (e.key === "Enter") document.getElementById("iaBtn").click();
+});
+
+loadDashboard();
+</script>
+{% endblock %}
